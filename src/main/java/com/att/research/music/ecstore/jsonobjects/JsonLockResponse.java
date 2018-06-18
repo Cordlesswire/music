@@ -19,13 +19,12 @@
  * ============LICENSE_END=============================================
  * ====================================================================
  */
-package com.att.research.music.datastore;
+package com.att.research.music.ecstore.jsonobjects;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import com.att.research.music.main.ResultType;
-import com.att.research.music.zklockingservice.MusicLockState.LockStatus;
+import helpers.ResultType;
 
 
 
@@ -36,7 +35,6 @@ public class JsonLockResponse {
     private String error;
     private String message;
     private String lock;
-    private LockStatus lockStatus;
     private String lockHolder;
     private String lockLease;
 
@@ -121,22 +119,6 @@ public class JsonLockResponse {
         return this;
     }
 
-    /**
-     * 
-     * @return the lockStatus
-     */
-    public LockStatus getLockStatus() {
-        return lockStatus;
-    }
-
-    /**
-     * 
-     * @param lockStatus
-     */
-    public JsonLockResponse setLockStatus(LockStatus lockStatus) {
-        this.lockStatus = lockStatus;
-        return this;
-    }
 
     /**
      * 
@@ -181,7 +163,6 @@ public class JsonLockResponse {
     public Map<String, Object> toMap() {
         Map<String, Object> fullMap = new HashMap<>();
         Map<String, Object> lockMap = new HashMap<>();
-        if (lockStatus!=null) {lockMap.put("lock-status", lockStatus); }
         if (lock!=null) {lockMap.put("lock", lock);}
         if (message!=null) {lockMap.put("message", message);}
         if (lockHolder!=null) {lockMap.put("lock-holder", lockHolder);}
@@ -199,7 +180,7 @@ public class JsonLockResponse {
     @Override
     public String toString() {
         return "JsonLockResponse [status=" + status + ", error=" + error + ", message=" + message
-                        + ", lock=" + lock + ", lockStatus=" + lockStatus + ", lockHolder="
+                        + ", lock=" + lock +  ", lockHolder="
                         + lockHolder + "]";
     }
 

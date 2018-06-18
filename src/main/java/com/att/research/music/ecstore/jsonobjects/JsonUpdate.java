@@ -20,24 +20,103 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.datastore;
+package com.att.research.music.ecstore.jsonobjects;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Map;
 
-public class JsonInsert implements Serializable {
+public class JsonUpdate implements Serializable {
 	private String keyspaceName;
 	private String tableName;
     private Map<String,Object> values;
-    String ttl, timestamp;
-	private Map<String,Object> row_specification;
+    private String ttl, timestamp;
     private Map<String,String> consistencyInfo;
+    private Map<String,Object> conditions;
+    private ArrayList<String> columns = null;
 
-    private int batchSize; //only for benchmarking. 
+    
+    //start benchmarking stuff
+    private int batchSize; 
+    private int mixSize; 
+    private int dataSize; 
+	private String operationType;
+    
+    
+    public ArrayList<String> getColumns() {
+		return columns;
+	}
+	public void setColumns(ArrayList<String> columns) {
+		this.columns = columns;
+	}
+
+    public String getOperationType() {
+		return operationType;
+	}
+
+	public void setOperationType(String operationType) {
+		this.operationType = operationType;
+	}
+
+    
+
+	public int getDataSize() {
+		return dataSize;
+	}
+
+	public void setDataSize(int dataSize) {
+		this.dataSize = dataSize;
+	}
+
+	public int getMixSize() {
+		return mixSize;
+	}
+
+	public void setMixSize(int mixSize) {
+		this.mixSize = mixSize;
+	}
+
+	public int getEvAtRatio() {
+		return evAtRatio;
+	}
+
+	public void setEvAtRatio(int evAtRatio) {
+		this.evAtRatio = evAtRatio;
+	}
+	private int startId; 
+    private int evAtRatio; 
+	private String keyName;
+    private String baseKeyValue;
+
+    public String getKeyName() {
+		return keyName;
+	}
+
+	public void setKeyName(String keyName) {
+		this.keyName = keyName;
+	}
+
+	public String getBaseKeyValue() {
+		return baseKeyValue;
+	}
+
+	public void setBaseKeyValue(String baseKeyValue) {
+		this.baseKeyValue = baseKeyValue;
+	}
+    
+    public int getStartId() {
+		return startId;
+	}
+
+	public void setStartId(int startId) {
+		this.startId = startId;
+	}
+
+
     
 	public int getBatchSize() {
 		return batchSize;
@@ -46,6 +125,25 @@ public class JsonInsert implements Serializable {
 	public void setBatchSize(int batchSize) {
 		this.batchSize = batchSize;
 	}
+
+	//end  benchmarking stuff
+	
+	public Map<String, Object> getConditions() {
+		return conditions;
+	}
+
+	public void setConditions(Map<String, Object> conditions) {
+		this.conditions = conditions;
+	}
+
+	public Map<String, Object> getRow_specification() {
+		return row_specification;
+	}
+
+	public void setRow_specification(Map<String, Object> row_specification) {
+		this.row_specification = row_specification;
+	}
+	private Map<String,Object> row_specification;
 
 	public String getKeyspaceName() {
 		return keyspaceName;
@@ -89,12 +187,6 @@ public class JsonInsert implements Serializable {
 	}
 	public void setValues(Map<String, Object> values) {
 		this.values = values;
-	}
-    public Map<String, Object> getRow_specification() {
-		return row_specification;
-	}
-	public void setRow_specification(Map<String, Object> row_specification) {
-		this.row_specification = row_specification;
 	}
 	public byte[] serialize(){
 		ByteArrayOutputStream bos = new ByteArrayOutputStream();

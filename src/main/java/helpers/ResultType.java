@@ -1,4 +1,4 @@
-package com.att.research.music.main;
+package helpers;
 
 public enum ResultType {SUCCESS, FAILURE};
 

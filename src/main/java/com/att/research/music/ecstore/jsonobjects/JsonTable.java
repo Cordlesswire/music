@@ -20,7 +20,7 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.datastore;
+package com.att.research.music.ecstore.jsonobjects;
 import java.util.Map;
 
 public class JsonTable {

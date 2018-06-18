@@ -1,4 +1,4 @@
-package com.att.research.music.main;
+package helpers;
 
 import java.io.File;
 import java.util.Arrays;
@@ -12,7 +12,7 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-import com.att.research.music.rest.RestMusicDataAPI;
+import com.att.research.music.REST.RestMusicDataAPI;
 
 public class Log4JInitServlet extends HttpServlet {
 

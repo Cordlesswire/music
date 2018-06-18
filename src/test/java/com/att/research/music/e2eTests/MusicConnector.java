@@ -42,17 +42,6 @@ public class MusicConnector {
 		return musicNodes[index];
 	}
 
-/*	public static String toggle(String serverAddress){
-		if(serverAddress.equals(agaveMusicNode)){
-			System.out.println("Agave is down...connect to Big Site");
-			serverAddress = bigSiteMusicNode;
-		}else if(serverAddress.equals(bigSiteMusicNode)){
-			System.out.println("Big Site is down...connect to Agave");
-			serverAddress = agaveMusicNode;
-		}
-		return serverAddress;
-	}
-*/	
 	
 	public String getMusicNodeURL(){
 			String musicurl = "http://"+getMusicNodeIp()+":8080/MUSIC/rest";
@@ -60,7 +49,7 @@ public class MusicConnector {
 			return musicurl;
 	}
 	
-	public boolean isHostUp(String serverAddress) { 
+	public boolean ispHostUp(String serverAddress) { 
 		Boolean isUp = false;
 	    try {
 			InetAddress inet = InetAddress.getByName(serverAddress);
@@ -74,16 +63,4 @@ public class MusicConnector {
 		}
 	    return isUp;
 	}
-	
-	/*	
-	private static String getMusicNodeIp(){
-		
-		//return "54.224.168.13";
-		return bigSiteMusicNode;
-		String serverAddress;
-		serverAddress = agaveMusicNode;
-		while(isHostUp(serverAddress) != true)
-			serverAddress = toggle(serverAddress);
-		return serverAddress;
-	}*/
 }

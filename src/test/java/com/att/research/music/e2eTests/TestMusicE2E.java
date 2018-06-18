@@ -31,10 +31,9 @@ import java.util.Map;
 
 import javax.ws.rs.core.MediaType;
 
-import com.att.research.music.datastore.JsonDelete;
-import com.att.research.music.datastore.JsonInsert;
-import com.att.research.music.datastore.JsonKeySpace;
-import com.att.research.music.datastore.JsonTable;
+import com.att.research.music.ecstore.jsonobjects.JsonKeySpace;
+import com.att.research.music.ecstore.jsonobjects.JsonTable;
+import com.att.research.music.ecstore.jsonobjects.JsonUpdate;
 import com.sun.jersey.api.client.Client;
 import com.sun.jersey.api.client.ClientResponse;
 import com.sun.jersey.api.client.WebResource;
@@ -147,7 +146,7 @@ public class TestMusicE2E {
 		Map<String,String> consistencyInfo= new HashMap<String, String>();
 		consistencyInfo.put("type", "eventual");
 
-		JsonInsert jIns = new JsonInsert();
+		JsonUpdate jIns = new JsonUpdate();
 		jIns.setValues(values);
 		jIns.setConsistencyInfo(consistencyInfo);
 		ClientConfig clientConfig = new DefaultClientConfig();
@@ -245,7 +244,7 @@ public class TestMusicE2E {
 		consistencyInfo.put("type", "critical");
 		consistencyInfo.put("lockId", lockId);
 
-		JsonInsert jIns = new JsonInsert();
+		JsonUpdate jIns = new JsonUpdate();
 		jIns.setValues(values);
 		jIns.setConsistencyInfo(consistencyInfo);
 		ClientConfig clientConfig = new DefaultClientConfig();
@@ -274,7 +273,7 @@ public class TestMusicE2E {
 		Map<String,String> consistencyInfo= new HashMap<String, String>();
 		consistencyInfo.put("type", "eventual");
 
-		JsonDelete jDel = new JsonDelete();
+		JsonUpdate jDel = new JsonUpdate();
 		jDel.setConsistencyInfo(consistencyInfo);
 		ClientConfig clientConfig = new DefaultClientConfig();
 

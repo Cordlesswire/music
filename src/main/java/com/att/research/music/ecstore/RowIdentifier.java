@@ -1,4 +1,4 @@
-package com.att.research.music.datastore;
+package com.att.research.music.ecstore;
 
 public class RowIdentifier{
 	public String primarKeyValue;

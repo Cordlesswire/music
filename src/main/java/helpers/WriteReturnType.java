@@ -1,21 +1,14 @@
-package com.att.research.music.main;
+package helpers;
 
-import com.datastax.driver.core.ResultSet;
-
-public class ReadReturnType {
+public class WriteReturnType {
 	private ResultType result;
 	private String message;
-	ResultSet payload;
-	public ReadReturnType(ResultType result, String message, ResultSet payload) {
+	public WriteReturnType(ResultType result, String message) {
 		super();
 		this.result = result;
 		this.message = message;
-		this.payload = payload; 
 	}
 
-	public ResultSet getPayload() {
-		return payload;
-	}
 	public ResultType getResultType() {
 		return result;
 	}

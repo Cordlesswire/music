@@ -20,26 +20,17 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.datastore;
+package com.att.research.music.ecstore.jsonobjects;
 
-import java.util.ArrayList;
 import java.util.Map;
 
-public class JsonDelete {
-	
-    private ArrayList<String> columns = null;
+
+public class JsonKeySpace {
+	private String keyspaceName;
+	private Map<String,Object> replicationInfo;
+	private String durabilityOfWrites;
     private Map<String,String> consistencyInfo;
-	private Map<String,Object> conditions;
 
-    public Map<String, Object> getConditions() {
-		return conditions;
-	}
-
-	public void setConditions(Map<String, Object> conditions) {
-		this.conditions = conditions;
-	}
-
-    
 	public Map<String, String> getConsistencyInfo() {
 		return consistencyInfo;
 	}
@@ -48,24 +39,29 @@ public class JsonDelete {
 		this.consistencyInfo = consistencyInfo;
 	}
 
-    public ArrayList<String> getColumns() {
-		return columns;
+	public Map<String, Object> getReplicationInfo() {
+		return replicationInfo;
 	}
-	public void setColumns(ArrayList<String> columns) {
-		this.columns = columns;
+	
+	public void setReplicationInfo(Map<String, Object> replicationInfo) {
+		this.replicationInfo = replicationInfo;
 	}
-	String ttl, timestamp;
 
-	public String getTtl() {
-		return ttl;
+	public String getDurabilityOfWrites() {
+		return durabilityOfWrites;
 	}
-	public void setTtl(String ttl) {
-		this.ttl = ttl;
+	public void setDurabilityOfWrites(String durabilityOfWrites) {
+		this.durabilityOfWrites = durabilityOfWrites;
 	}
-	public String getTimestamp() {
-		return timestamp;
+    public String getKeyspaceName() {
+		return keyspaceName;
 	}
-	public void setTimestamp(String timestamp) {
-		this.timestamp = timestamp;
+
+	public void setKeyspaceName(String keyspaceName) {
+		this.keyspaceName = keyspaceName;
 	}
+
+		
+	
+
 }

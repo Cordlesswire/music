@@ -20,7 +20,7 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.main;
+package helpers;
 
 import java.io.File;
 import java.io.FileNotFoundException;

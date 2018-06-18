@@ -20,25 +20,17 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.datastore;
+package com.att.research.music.ecstore;
 
-import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.sql.Timestamp;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import javax.ws.rs.core.MultivaluedMap;
 
 import org.apache.log4j.Logger;
 
@@ -46,7 +38,6 @@ import com.datastax.driver.core.Cluster;
 import com.datastax.driver.core.ColumnDefinitions;
 import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.DataType;
-import com.datastax.driver.core.Host;
 import com.datastax.driver.core.KeyspaceMetadata;
 import com.datastax.driver.core.Metadata;
 import com.datastax.driver.core.PreparedStatement;
@@ -56,21 +47,23 @@ import com.datastax.driver.core.Session;
 import com.datastax.driver.core.SimpleStatement;
 import com.datastax.driver.core.Statement;
 import com.datastax.driver.core.TableMetadata;
-import com.datastax.driver.core.ColumnDefinitions.Definition;
 import com.datastax.driver.core.exceptions.NoHostAvailableException;
 import com.datastax.driver.core.utils.UUIDs;
 
-public class MusicDataStore {
+public class CassaECStore {
 	private Session session;
 	private Cluster cluster;
-	final static Logger logger = Logger.getLogger(MusicDataStore.class);
+	DataFormatter dataFormatter; 
+	final static Logger logger = Logger.getLogger(CassaECStore.class);
 
-	public MusicDataStore(){
+	public CassaECStore(){
 		connectToCassaCluster();
+		dataFormatter = new DataFormatter();
 	}
 
-	public MusicDataStore(String remoteIp){
+	public CassaECStore(String remoteIp){
 		connectToCassaCluster(remoteIp);
+		dataFormatter = new DataFormatter();
 	}
 
 	private ArrayList<String> getAllPossibleLocalIps(){
@@ -99,16 +92,9 @@ public class MusicDataStore {
 		while(it.hasNext()){
 			try {
 				cluster = Cluster.builder().withPort(9042).addContactPoint(address).build();
-				//cluster.getConfiguration().getSocketOptions().setReadTimeoutMillis(Integer.MAX_VALUE);
 				Metadata metadata = cluster.getMetadata();
 				logger.debug("Connected to cassa cluster "+metadata.getClusterName()+" at "+address);
-/*				for ( Host host : metadata.getAllHosts() ) {
-						.out.printf("Datacenter: %s; Host broadcast: %s; Rack: %s\n",
-							host.getDatacenter(), host.getBroadcastAddress(), host.getRack());
-							
-				}*/
-				session = cluster.connect();
-				
+				session = cluster.connect();			
 				break;
 			} catch (NoHostAvailableException e) {
 				address= it.next();
@@ -116,23 +102,11 @@ public class MusicDataStore {
 		}
 	}
 	
-/*	public  ArrayList<String> getAllNodePublicIps(){
-		Metadata metadata = cluster.getMetadata();
-		ArrayList<String> nodePublicIps = new ArrayList<String>();
-		for ( Host host : metadata.getAllHosts() ) {
-			nodePublicIps.add(host.getBroadcastAddress().getHostAddress());
-		}
-		return nodePublicIps;
-	}
-*/	
+
 	private void connectToCassaCluster(String address){	
 		cluster = Cluster.builder().withPort(9042).addContactPoint(address).build();
 		Metadata metadata = cluster.getMetadata();
 		logger.debug("Connected to cassa cluster "+metadata.getClusterName()+" at "+address);
-/*		for ( Host host : metadata.getAllHosts() ) {
-			System.out.printf("Datacenter: %s; Host broadcast: %s; Rack: %s\n",
-					host.getDatacenter(), host.getBroadcastAddress(), host.getRack());
-		}*/
 		session = cluster.connect();
 	}
 
@@ -193,86 +167,21 @@ public class MusicDataStore {
 		logger.debug("Time taken for actual put in cassandra:"+(end-start));
 	}
 
-	public Object getColValue(Row row, String colName, DataType colType){	
-		switch(colType.getName()){
-		case VARCHAR: 
-			return row.getString(colName);
-		case UUID: 
-			return row.getUUID(colName);
-		case VARINT: 
-			return row.getVarint(colName);
-		case BIGINT: 
-			return row.getLong(colName);
-		case INT: 
-			return row.getInt(colName);
-		case FLOAT: 
-			return row.getFloat(colName);	
-		case DOUBLE: 
-			return row.getDouble(colName);
-		case BOOLEAN: 
-			return row.getBool(colName);
-		case MAP: 
-			return row.getMap(colName, String.class, String.class);
-		default: 
-			return null;
-		}
-	}
-	
+
 	public boolean doesRowSatisfyCondition(Row row, Map<String, Object> condition){
 		ColumnDefinitions colInfo = row.getColumnDefinitions();
 		
 		for (Map.Entry<String, Object> entry : condition.entrySet()){
 			String colName = entry.getKey();
 			DataType colType = colInfo.getType(colName);
-			Object columnValue = getColValue(row, colName, colType);
-			Object conditionValue = convertToActualDataType(colType, entry.getValue());
+			Object columnValue = dataFormatter.getColValue(row, colName, colType);
+			Object conditionValue = dataFormatter.convertToActualDataType(colType, entry.getValue());
 			if(columnValue.equals(conditionValue) == false)
 				return false;		
 		}
 		return true;	
 	}
 
-	public Map<String, HashMap<String, Object>> marshalData(ResultSet results){
-		Map<String, HashMap<String, Object>> resultMap = new HashMap<String, HashMap<String,Object>>();
-		int counter =0;
-		for (Row row : results) {
-			ColumnDefinitions colInfo = row.getColumnDefinitions();
-			HashMap<String,Object> resultOutput = new HashMap<String, Object>();
-			for (Definition definition : colInfo) {
-				if(!definition.getName().equals("vector_ts"))
-					resultOutput.put(definition.getName(), getColValue(row, definition.getName(), definition.getType()));
-			}
-			resultMap.put("row "+counter, resultOutput);
-			counter++;
-		}
-		return resultMap;
-	}
-
-
-	//new stuff...prepared statements
-	public static Object convertToActualDataType(DataType colType,Object valueObj){
-		String valueObjString = valueObj+"";
-		switch(colType.getName()){
-		case UUID: 
-			return UUID.fromString(valueObjString);
-		case VARINT: 
-			return BigInteger.valueOf(Long.parseLong(valueObjString));
-		case BIGINT: 
-			return Long.parseLong(valueObjString);
-		case INT: 
-			return Integer.parseInt(valueObjString);
-		case FLOAT: 
-			return Float.parseFloat(valueObjString);	
-		case DOUBLE: 
-			return Double.parseDouble(valueObjString);
-		case BOOLEAN: 
-			return Boolean.parseBoolean(valueObjString);
-		case MAP: 
-			return (Map<String,Object>)valueObj;
-		default:
-			return valueObjString;
-		}
-	}
 
 	public void preparedInsert(String keyspace, String table, String fields, String valueHolder, 
 			ArrayList<Object> values,String ttl, String timestamp,String consistency) throws Exception{
@@ -323,7 +232,7 @@ public class MusicDataStore {
 		executePut(tabQuery, "critical");
 	}
 	
-	public UUID createLockReferenceUUID(String keyspace, String table, String key) {
+	public UUID createLockReference(String keyspace, String table, String key) {
 		table = "locks_"+table; 
 		UUID timeBasedUuid = UUIDs.timeBased();
 		String values = "('"+key+"',"+timeBasedUuid+",'"+timeBasedUuid.timestamp()+"')";
@@ -333,36 +242,43 @@ public class MusicDataStore {
 	}
 	
 	public boolean isItMyTurn(String keyspace, String table, String key, UUID lockReferenceUUID) {
-		table = "locks_"+table; 
-		String selectQuery = "select * from "+keyspace+"."+table+" where key='"+key+"' LIMIT 1;";	
-		
-		ResultSet results = session.execute(selectQuery);
-		String topOfQ = results.one().getUUID("lockReferenceUUID")+"";
+		String topOfQ = whoIsTopOfLockQ(keyspace, table, key);
 		return lockReferenceUUID.toString().equals(topOfQ);
 	}
 	
-	public void releaseLock(String keyspace, String table, String key, UUID lockReferenceUUID) {
+	public void releaseLockReference(String keyspace, String table, String key, UUID lockReferenceUUID) {
 		table = "locks_"+table; 
 		String deleteQuery = "delete from "+keyspace+"."+table+" where key='"+key+"' AND lockReferenceUUID ="+lockReferenceUUID+" IF EXISTS;";	
 		executePut(deleteQuery, "critical");	
 	}
 	
-	/* delete lock is not even needed -- as long as all lock references are cleaned up, 
-	there wont be any key in the l*/
+	public String whoIsTopOfLockQ(String keyspace, String table, String key) {
+		table = "locks_"+table; 
+		String selectQuery = "select * from "+keyspace+"."+table+" where key='"+key+"' LIMIT 1;";	
+		
+		ResultSet results = session.execute(selectQuery);
+		return results.one().getUUID("lockReferenceUUID")+"";
+	}
+
+	public  void deleteLock(String keyspace, String table, String key){
+		table = "locks_"+table; 
+		String deleteQuery = "delete from "+keyspace+"."+table+" where key='"+key+"';";	
+		session.execute(deleteQuery);
+	}
 
 
 	
 	public static void main(String[] args) {
-		MusicDataStore ds = new MusicDataStore();
+		CassaECStore ds = new CassaECStore();
 		String keyspace = "bmkeyspace";
 		String table = "locktesttable";
 		ds.createLockingTable(keyspace, table);
 		
-		UUID lockRefb1 = ds.createLockReferenceUUID(keyspace, table, "bharath");
-		UUID lockRefc1 = ds.createLockReferenceUUID(keyspace, table, "cat");
+		UUID lockRefb1 = ds.createLockReference(keyspace, table, "bharath");
+		UUID lockRefc1 = ds.createLockReference(keyspace, table, "cat");
 
-		UUID lockRefb2 = ds.createLockReferenceUUID(keyspace, table, "bharath");
-		UUID lockRefc2 = ds.createLockReferenceUUID(keyspace, table, "cat");
+		UUID lockRefb2 = ds.createLockReference(keyspace, table, "bharath");
+		UUID lockRefc2 = ds.createLockReference(keyspace, table, "cat");
 
 		System.out.println(ds.isItMyTurn(keyspace, table, "bharath", lockRefb1));
 		
@@ -371,7 +287,7 @@ public class MusicDataStore {
 		System.out.println(ds.isItMyTurn(keyspace, table, "bharath", lockRefb2));
 
 		
-		ds.releaseLock(keyspace, table, "cat", lockRefc1);
+		ds.releaseLockReference(keyspace, table, "cat", lockRefc1);
 
 		System.out.println(ds.isItMyTurn(keyspace, table, "cat", lockRefc2));
 
