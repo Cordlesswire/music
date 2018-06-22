@@ -45,16 +45,16 @@ import javax.ws.rs.core.UriInfo;
 
 import org.apache.log4j.Logger;
 
-import com.att.research.music.ecstore.DataFormatter;
-import com.att.research.music.ecstore.RowIdentifier;
-import com.att.research.music.ecstore.jsonobjects.JsonKeySpace;
-import com.att.research.music.ecstore.jsonobjects.JsonTable;
-import com.att.research.music.ecstore.jsonobjects.JsonUpdate;
+import com.att.research.music.datastore.DataFormatter;
+import com.att.research.music.datastore.RowIdentifier;
+import com.att.research.music.datastore.cassaORM.TableORM;
+import com.att.research.music.datastore.cassaORM.IndexORM;
+import com.att.research.music.datastore.cassaORM.RowORM;
+import com.att.research.music.datastore.cassaORM.KeySpaceORM;
 import com.att.research.music.main.Music;
 import com.att.research.music.main.Music.Condition;
 import com.datastax.driver.core.DataType;
 import com.datastax.driver.core.ResultSet;
-import com.datastax.driver.core.TableMetadata;
 
 import helpers.MusicUtil;
 import helpers.ReadReturnType;
@@ -76,97 +76,50 @@ public class RestMusicDataAPI {
 	@POST
 	@Path("/keyspaces/{name}")
 	@Consumes(MediaType.APPLICATION_JSON)
-	public void createKeySpace(JsonKeySpace  kspObject,@PathParam("name") String keyspace) throws Exception{
+	public void createKeySpace(KeySpaceORM  kspObject,@PathParam("name") String keyspace) throws Exception{
 		long start = System.currentTimeMillis();
-		Map<String,Object> replicationInfo = kspObject.getReplicationInfo();
-		String repString = "{"+new DataFormatter().jsonMaptoSqlString(replicationInfo,",")+"}";
-		String query ="CREATE KEYSPACE IF NOT EXISTS "+ keyspace +" WITH replication = " + 
-				repString;
-		if(kspObject.getDurabilityOfWrites() != null)
-			query = query +" AND durable_writes = " + kspObject.getDurabilityOfWrites() ;
-		query = query + ";";
 		long end = System.currentTimeMillis();
 		logger.debug("Time taken for setting up query in create keyspace:"+ (end-start));
-		new Music().createKeyspace(query);
+		new Music().createKeyspace(kspObject);
 	}
 
 	@DELETE
 	@Path("/keyspaces/{name}")
 	@Consumes(MediaType.APPLICATION_JSON)
-	public void dropKeySpace(JsonKeySpace  kspObject,@PathParam("name") String keyspace) throws Exception{ 
-		String query ="DROP KEYSPACE "+ keyspace+";"; 
-		new Music().dropKeyspace(query);
+	public void dropKeySpace(KeySpaceORM  kspObject,@PathParam("name") String keyspace) throws Exception{ 
+		new Music().dropKeyspace(kspObject);
 	}
 
 
 	@POST
 	@Path("/keyspaces/{keyspace}/tables/{tablename}")
 	@Consumes(MediaType.APPLICATION_JSON)
-	public void createTable(JsonTable tableObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String table) throws Exception{ 
-		//first read the information about the table fields
-		Map<String,String> fields = tableObj.getFields();
-		String fieldsString="";
-		int counter =0;
-		String primaryKey;
-		for (Map.Entry<String, String> entry : fields.entrySet())
-		{
-			fieldsString = fieldsString+""+entry.getKey()+" "+ entry.getValue()+"";
-			if(entry.getKey().equals("PRIMARY KEY")){
-				primaryKey = entry.getValue().substring(entry.getValue().indexOf("(") + 1);
-				primaryKey = primaryKey.substring(0, primaryKey.indexOf(")"));
-			}
-			if(counter==fields.size()-1)
-				fieldsString = fieldsString+")";
-			else 
-				fieldsString = fieldsString+",";
-			counter = counter +1;
-		}	
+	public void createTable(TableORM tableObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String table) throws Exception{ 
+		tableObj.setKeyspaceName(keyspace);
+		tableObj.setTableName(table);
+		new Music().createTable(tableObj);
+	}
 
 
-
-		//information about the name-value style properties 
-		Map<String,Object> propertiesMap = tableObj.getProperties();
-		String propertiesString="";
-
-		if(propertiesMap != null){
-			counter =0;
-			for (Map.Entry<String, Object> entry : propertiesMap.entrySet())
-			{
-				Object ot = entry.getValue();
-				String value = ot+"";
-				if(ot instanceof String){
-					value = "'"+value+"'";
-				}else if(ot instanceof Map){
-					Map<String,Object> otMap = (Map<String,Object>)ot;
-					value = "{"+new DataFormatter().jsonMaptoSqlString(otMap, ",")+"}";
-				}
-				propertiesString = propertiesString+entry.getKey()+"="+ value+"";
-				if(counter!=propertiesMap.size()-1)
-					propertiesString = propertiesString+" AND ";
-				counter = counter +1;
-			}	
-		}
-
-		String query =  "CREATE TABLE IF NOT EXISTS "+keyspace+"."+table+" "+ fieldsString; 
-
-		if(propertiesMap != null)
-			query = query + " WITH "+ propertiesString;
-
-		query = query +";";
-		new Music().createTable(keyspace, table, query);
+	@DELETE
+	@Path("/keyspaces/{keyspace}/tables/{tablename}")
+	public void dropTable(TableORM tableObj,@PathParam("keyspace") String keyspace, @PathParam("tablename") String table) throws Exception{ 
+		tableObj.setKeyspaceName(keyspace);
+		tableObj.setTableName(table);
+		new Music().dropTable(tableObj);
 	}
 
 	
 	
 	@POST
 	@Path("/keyspaces/{keyspace}/tables/{tablename}/index/{field}")
-	public void createIndex(@PathParam("keyspace") String keyspace, @PathParam("tablename") String tablename, @PathParam("field") String fieldName,@Context UriInfo info) throws Exception{
+	public void createIndex(@PathParam("keyspace") String keyspace, @PathParam("tablename") String table, @PathParam("field") String fieldName,@Context UriInfo info) throws Exception{
 		MultivaluedMap<String, String> rowParams = info.getQueryParameters();
 		String indexName="";
 		if(rowParams.getFirst("index_name") != null)
 			indexName = rowParams.getFirst("index_name");	
-		String query = "Create index "+indexName+" if not exists on "+keyspace+"."+tablename+" ("+fieldName+");";
-		new Music().createIndex(query);
+		IndexORM indexObj = new IndexORM(keyspace, table, indexName, fieldName);
+		new Music().createIndex(indexObj);
 	}
 	
 	
@@ -174,74 +127,18 @@ public class RestMusicDataAPI {
 	@Path("/keyspaces/{keyspace}/tables/{tablename}/rows")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
-	public void insertIntoTable(JsonUpdate insObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String table) throws Exception{
-		Map<String,Object> valuesMap =  insObj.getValues();
-		String primaryKeyName= new Music().getPrimaryKey(keyspace, table);
-		String fieldsString="";
-		String valueString ="";
-		int counter =0;
-		String primaryKey="";
-		for (Map.Entry<String, Object> entry : valuesMap.entrySet()){
-			fieldsString = fieldsString+""+entry.getKey();
-			Object valueObj = entry.getValue();	
-			if(primaryKeyName.equals(entry.getKey())){
-				primaryKey= entry.getValue()+"";
-				primaryKey = primaryKey.replace("'", "''");
-			}
-
-			DataType colType = new Music().getColType(keyspace, table, entry.getKey());
-			String formattedValue = new DataFormatter().convertToCQLDataType(colType, valueObj);
-			valueString = valueString + formattedValue;
-			if(counter==valuesMap.size()-1){
-				fieldsString = fieldsString+")";
-				valueString = valueString+")";
-			}
-			else{ 
-				fieldsString = fieldsString+",";
-				valueString = valueString+",";
-			}
-			counter = counter +1;
-		}
-
-		//System.out.println(valueString);
-		String query =  "INSERT INTO "+keyspace+"."+table+" "+ fieldsString+" VALUES "+ valueString;   
-
-		String ttl = insObj.getTtl();
-		String timestamp = insObj.getTimestamp();
-
-		if((ttl != null) && (timestamp != null)){
-			query = query + " USING TTL "+ ttl +" AND TIMESTAMP "+ timestamp;
-		}
-
-		if((ttl != null) && (timestamp == null)){
-			query = query + " USING TTL "+ ttl;
-		}
-
-		if((ttl == null) && (timestamp != null)){
-			query = query + " USING TIMESTAMP "+ timestamp;
-		}
-
-		query = query +";";
-
-		String consistency = insObj.getConsistencyInfo().get("type");
-		if(consistency.equalsIgnoreCase("eventual"))
-			new Music().eventualPut(query);
-		else if(consistency.equalsIgnoreCase("critical")){
-			String lockId = insObj.getConsistencyInfo().get("lockId");
-			new Music().criticalPut(keyspace,table,primaryKey, query, lockId, null);
-		}
-		else if(consistency.equalsIgnoreCase("atomic")){
-			new Music().atomicPut(keyspace,table,primaryKey, query,null);
-		}
+	public void insertIntoTable(RowORM insObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String table) throws Exception{
+		insObj.setKeyspaceName(keyspace);
+		insObj.setTableName(table);
+		new Music().insertIntoTable(insObj);
 	}
-	
 	
 
 	@PUT
 	@Path("/keyspaces/{keyspace}/tables/{tablename}/rows")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
-	public String updateTable(JsonUpdate updateObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String table, @Context UriInfo info) throws Exception{
+	public String updateTable(RowORM updateObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String table, @Context UriInfo info) throws Exception{
 		long startTime = System.currentTimeMillis();
 		String operationId = UUID.randomUUID().toString();//just for debugging purposes. 
 		String consistency = updateObj.getConsistencyInfo().get("type");
@@ -328,7 +225,7 @@ public class RestMusicDataAPI {
 	@Path("/keyspaces/{keyspace}/tables/{tablename}/rows")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)
-	public String deleteFromTable(JsonUpdate delObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String tablename, @Context UriInfo info) throws Exception{ 
+	public String deleteFromTable(RowORM delObj, @PathParam("keyspace") String keyspace, @PathParam("tablename") String tablename, @Context UriInfo info) throws Exception{ 
 		String columnString="";
 		int counter =0;
 		ArrayList<String> columnList = delObj.getColumns();
@@ -384,13 +281,6 @@ public class RestMusicDataAPI {
 		return operationResult.toString();
 	}
 
-	@DELETE
-	@Path("/keyspaces/{keyspace}/tables/{tablename}")
-	public void dropTable(JsonTable tabObj,@PathParam("keyspace") String keyspace, @PathParam("tablename") String table) throws Exception{ 
-		String query ="DROP TABLE IF EXISTS "+ keyspace+"."+table+";"; 
-		new Music().dropTable(query);
-	}
-
 	private RowIdentifier getRowIdentifier(String keyspace,String table, MultivaluedMap<String, String> rowParams){
 		String rowIdString="";
 		int counter =0;
@@ -429,7 +319,7 @@ public class RestMusicDataAPI {
 	@Path("/keyspaces/{keyspace}/tables/{tablename}/rows/criticalget")
 	@Consumes(MediaType.APPLICATION_JSON)
 	@Produces(MediaType.APPLICATION_JSON)	
-	public Map<String, HashMap<String, Object>> selectCritical(JsonUpdate selObj,@PathParam("keyspace") String keyspace, @PathParam("tablename") String table, @Context UriInfo info){
+	public Map<String, HashMap<String, Object>> selectCritical(RowORM selObj,@PathParam("keyspace") String keyspace, @PathParam("tablename") String table, @Context UriInfo info){
 		long startTime = System.currentTimeMillis();
 		String operationId = UUID.randomUUID().toString();//just for debugging purposes. 
 		String consistency = selObj.getConsistencyInfo().get("type");

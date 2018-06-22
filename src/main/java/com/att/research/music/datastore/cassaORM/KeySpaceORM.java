@@ -20,13 +20,15 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.ecstore.jsonobjects;
+package com.att.research.music.datastore.cassaORM;
 
 import java.util.Map;
 
+import com.att.research.music.datastore.DataFormatter;
 
-public class JsonKeySpace {
-	private String keyspaceName;
+
+public class KeySpaceORM {
+	private String keyspace;
 	private Map<String,Object> replicationInfo;
 	private String durabilityOfWrites;
     private Map<String,String> consistencyInfo;
@@ -54,14 +56,27 @@ public class JsonKeySpace {
 		this.durabilityOfWrites = durabilityOfWrites;
 	}
     public String getKeyspaceName() {
-		return keyspaceName;
+		return keyspace;
 	}
 
 	public void setKeyspaceName(String keyspaceName) {
-		this.keyspaceName = keyspaceName;
+		this.keyspace = keyspaceName;
 	}
 
-		
+	public String createKeySpaceQuery() {
+		Map<String,Object> replicationInfo = getReplicationInfo();
+		String repString = "{"+new DataFormatter().jsonMaptoSqlString(replicationInfo,",")+"}";
+		String query ="CREATE KEYSPACE IF NOT EXISTS "+ keyspace +" WITH replication = " + 
+				repString;
+		if(getDurabilityOfWrites() != null)
+			query = query +" AND durable_writes = " + getDurabilityOfWrites() ;
+		query = query + ";";		
+		return query;
+	}
 	
+	public String dropKeySpaceQuery() {
+		String query ="DROP KEYSPACE "+ keyspace+";"; 
+		return query;
+	}
 
 }

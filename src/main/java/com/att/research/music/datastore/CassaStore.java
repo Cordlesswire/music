@@ -20,7 +20,7 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.ecstore;
+package com.att.research.music.datastore;
 
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -30,7 +30,7 @@ import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
-
+import java.util.concurrent.TimeUnit;
 
 import org.apache.log4j.Logger;
 
@@ -40,7 +40,6 @@ import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.DataType;
 import com.datastax.driver.core.KeyspaceMetadata;
 import com.datastax.driver.core.Metadata;
-import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
@@ -50,18 +49,21 @@ import com.datastax.driver.core.TableMetadata;
 import com.datastax.driver.core.exceptions.NoHostAvailableException;
 import com.datastax.driver.core.utils.UUIDs;
 
-public class CassaECStore {
+public class CassaStore {
 	private Session session;
 	private Cluster cluster;
 	DataFormatter dataFormatter; 
-	final static Logger logger = Logger.getLogger(CassaECStore.class);
+	final static Logger logger = Logger.getLogger(CassaStore.class);
+	private static final  long leasePeriod = 5000;//5 seconds
+	private static final long epochPeriod = TimeUnit.DAYS.toMillis(365);//1 year in millseconds.
 
-	public CassaECStore(){
+
+	public CassaStore(){
 		connectToCassaCluster();
 		dataFormatter = new DataFormatter();
 	}
 
-	public CassaECStore(String remoteIp){
+	public CassaStore(String remoteIp){
 		connectToCassaCluster(remoteIp);
 		dataFormatter = new DataFormatter();
 	}
@@ -141,6 +143,9 @@ public class CassaECStore {
 		return ks.getTable(tableName);
 	}
 
+	public void atomicInsert() {
+		
+	}
 	public void executePut(String query, String consistency){
 		logger.debug("in data store handle, executing put:"+query);
 		long start = System.currentTimeMillis();
@@ -183,49 +188,12 @@ public class CassaECStore {
 	}
 
 
-	public void preparedInsert(String keyspace, String table, String fields, String valueHolder, 
-			ArrayList<Object> values,String ttl, String timestamp,String consistency) throws Exception{
-		logger.debug("In prepared insert: fields string:"+fields+"values:"+valueHolder);
-		String insertQuery = "INSERT INTO "+keyspace+"."+table+" "+ fields+" values "+ valueHolder;
-		
-		if((ttl != null) && (timestamp != null)){
-			logger.debug("both there");
-			insertQuery = insertQuery + " USING TTL ? AND TIMESTAMP ?";
-			values.add(Integer.parseInt(ttl));
-			values.add(Long.parseLong(timestamp));
-		}
-		
-		if((ttl != null) && (timestamp == null)){
-			logger.debug("ONLY TTL there");
-			insertQuery = insertQuery + " USING TTL ?";
-			values.add(Integer.parseInt(ttl));
-		}
-
-		if((ttl == null) && (timestamp != null)){
-			logger.debug("ONLY timestamp there");
-			insertQuery = insertQuery + " USING TIMESTAMP ?";
-			values.add(Long.parseLong(timestamp));
-		}
-
-		logger.info("In preprared insert: the actual insert query:"+insertQuery+"; the values"+values);
-		PreparedStatement preparedInsert = session.prepare(insertQuery);
-		if(consistency.equalsIgnoreCase("critical")){
-			logger.info("Executing critical put query");
-			preparedInsert.setConsistencyLevel(ConsistencyLevel.QUORUM);
-		}
-		else if (consistency.equalsIgnoreCase("eventual")){
-			logger.info("Executing simple put query");
-			preparedInsert.setConsistencyLevel(ConsistencyLevel.ONE);
-		}
-		session.execute(preparedInsert.bind(values.toArray()));
-		
-	}
 	
 	
 	public void createLockingTable(String keyspace, String table) {
 		table = "locks_"+table; 
 		String tabQuery = "CREATE TABLE IF NOT EXISTS "+keyspace+"."+table
-				+ " ( key text, lockReferenceUUID timeuuid, creationtime text,   PRIMARY KEY ((key), lockReferenceUUID) ) "
+				+ " (key text, lockReferenceUUID timeuuid, owner text,  metadata text, PRIMARY KEY ((key), lockReferenceUUID, owner) ) "
 				+ "WITH CLUSTERING ORDER BY (lockReferenceUUID ASC);";
 		System.out.println(tabQuery);
 		
@@ -235,21 +203,84 @@ public class CassaECStore {
 	public UUID createLockReference(String keyspace, String table, String key) {
 		table = "locks_"+table; 
 		UUID timeBasedUuid = UUIDs.timeBased();
-		String values = "('"+key+"',"+timeBasedUuid+",'"+timeBasedUuid.timestamp()+"')";
-		String insQuery = "INSERT INTO "+keyspace+"."+table+"(key, lockReferenceUUID, creationtime) VALUES"+values+" IF NOT EXISTS;";	
+		String values = "('"+key+"',"+timeBasedUuid+",'user','no-lock-acquisition-status')";
+		String insQuery = "INSERT INTO "+keyspace+"."+table+"(key, lockReferenceUUID, owner, metadata) VALUES"+values+" IF NOT EXISTS;";	
 		executePut(insQuery, "critical");	
 		return timeBasedUuid;
 	}
 	
-	public boolean isItMyTurn(String keyspace, String table, String key, UUID lockReferenceUUID) {
+	public boolean isTopOfLockQ(String keyspace, String table, String key, UUID lockReferenceUUID) {
 		String topOfQ = whoIsTopOfLockQ(keyspace, table, key);
 		return lockReferenceUUID.toString().equals(topOfQ);
 	}
+	
 	
 	public void releaseLockReference(String keyspace, String table, String key, UUID lockReferenceUUID) {
 		table = "locks_"+table; 
 		String deleteQuery = "delete from "+keyspace+"."+table+" where key='"+key+"' AND lockReferenceUUID ="+lockReferenceUUID+" IF EXISTS;";	
 		executePut(deleteQuery, "critical");	
+	}
+	
+	
+	public void releaseLockHolderIfExpired(String keyspace, String table, String key) {
+		//obtain row at top of lock queue for the key
+		table = "locks_"+table; 
+		
+		//obtain both current lock holder and the one next in line 
+		String selectQuery = "select * from "+keyspace+"."+table+" where key='"+key+"' and owner = 'user' LIMIT 2;";		
+		ResultSet results = session.execute(selectQuery);
+		
+		//check if current lock holder has exceeded his lease
+		UUID lockReferenceUUID = results.one().getUUID("lockReferenceUUID");
+		long currentTime = UUIDs.timeBased().timestamp();//to compare meaningfully
+		
+		if((lockReferenceUUID.timestamp()-currentTime) < leasePeriod)
+			return; 
+		else {
+			/* the current lock holder has exceeded the lease -- proceed with the activities to ensure
+			 * that this lock holder does not corrupt a future critical section
+			 */
+			
+			//get current epoch and increment it
+			incrementEpoch(keyspace, table, key);
+			
+			
+			//tell the next in line that it was a forceful acquisition 
+			
+		}
+		
+
+
+	}
+	
+	public class Epoch{
+		int epochNumber;
+		long epochStartTime;
+		public Epoch(int epochNumber, long epochStartTime) {
+			this.epochNumber = epochNumber;
+			this.epochStartTime = epochStartTime;
+		}
+		
+	}
+	
+	public int getCurrentEpoch(String keyspace, String table, String key) {
+		int currentEpoch =0;
+		String selectQuery = "select * from "+keyspace+"."+table+" where key='"+key+"' and owner = 'admin';";		
+		ResultSet results = session.execute(selectQuery);
+		if(results.all().size() !=0) {
+			String metadata = results.one().getString("metadata");
+			String[] splitMetaData = metadata.split("||");
+			String[] epochInfo = splitMetaData[0].split(":");
+			currentEpoch = Integer.parseInt(epochInfo[1]);
+		}
+		return currentEpoch;
+	}
+
+	public void incrementEpoch(String keyspace, String table, String key) {
+		int newEpoch = getCurrentEpoch(keyspace, table, key)+ 1; 
+		String updateQuery = "update "+keyspace+"."+table+" set where key='"+key+"' and owner = 'admin';";		
+
+		
 	}
 	
 	public String whoIsTopOfLockQ(String keyspace, String table, String key) {
@@ -269,7 +300,12 @@ public class CassaECStore {
 
 	
 	public static void main(String[] args) {
-		CassaECStore ds = new CassaECStore();
+		System.out.println(CassaStore.epochPeriod);
+		System.out.println(60 * 60 * 1000);
+		System.out.println(60 * 60 * 1000*365*24);
+		
+	/*	
+		CassaStore ds = new CassaStore();
 		String keyspace = "bmkeyspace";
 		String table = "locktesttable";
 		ds.createLockingTable(keyspace, table);
@@ -280,18 +316,19 @@ public class CassaECStore {
 		UUID lockRefb2 = ds.createLockReference(keyspace, table, "bharath");
 		UUID lockRefc2 = ds.createLockReference(keyspace, table, "cat");
 
-		System.out.println(ds.isItMyTurn(keyspace, table, "bharath", lockRefb1));
+		System.out.println(ds.isTopOfLockQ(keyspace, table, "bharath", lockRefb1));
 		
-		System.out.println(ds.isItMyTurn(keyspace, table, "cat", lockRefc2));
+		System.out.println(ds.isTopOfLockQ(keyspace, table, "cat", lockRefc2));
 		
-		System.out.println(ds.isItMyTurn(keyspace, table, "bharath", lockRefb2));
+		System.out.println(ds.isTopOfLockQ(keyspace, table, "bharath", lockRefb2));
 
 		
 		ds.releaseLockReference(keyspace, table, "cat", lockRefc1);
 
-		System.out.println(ds.isItMyTurn(keyspace, table, "cat", lockRefc2));
+		System.out.println(ds.isTopOfLockQ(keyspace, table, "cat", lockRefc2));
 
-		System.out.println(ds.isItMyTurn(keyspace, table, "cat", lockRefc1));
+		System.out.println(ds.isTopOfLockQ(keyspace, table, "cat", lockRefc1));
+		*/
 	}
 
 }

@@ -14,8 +14,8 @@ import javax.ws.rs.core.MediaType;
 
 import org.apache.log4j.Logger;
 
-import com.att.research.music.ecstore.jsonobjects.JsonLeasedLock;
-import com.att.research.music.ecstore.jsonobjects.JsonLockResponse;
+import com.att.research.music.datastore.cassaORM.JsonLeasedLock;
+import com.att.research.music.datastore.cassaORM.JsonLockResponse;
 import com.att.research.music.main.Music;
 
 import helpers.ResultType;

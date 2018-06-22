@@ -20,12 +20,16 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.ecstore.jsonobjects;
+package com.att.research.music.datastore.cassaORM;
 import java.util.Map;
 
-public class JsonTable {
-	private String keyspaceName;
-	private String tableName;
+import org.apache.commons.lang3.tuple.Pair;
+
+import com.att.research.music.datastore.DataFormatter;
+
+public class TableORM {
+	private String keyspace;
+	private String table;
 
 	private Map<String,String> fields;
 	private Map<String, Object> properties; 
@@ -33,7 +37,6 @@ public class JsonTable {
 	private String sortingKey;
     private String clusteringOrder;
     private Map<String,String> consistencyInfo;
-
 
 	public Map<String, String> getConsistencyInfo() {
 		return consistencyInfo;
@@ -60,18 +63,18 @@ public class JsonTable {
 	}
 
 	public String getKeyspaceName() {
-		return keyspaceName;
+		return keyspace;
 	}
 
 	public void setKeyspaceName(String keyspaceName) {
-		this.keyspaceName = keyspaceName;
+		this.keyspace = keyspaceName;
 	}
     public String getTableName() {
-		return tableName;
+		return table;
 	}
 
 	public void setTableName(String tableName) {
-		this.tableName = tableName;
+		this.table = tableName;
 	}
 	public String getSortingKey() {
 		return sortingKey;
@@ -96,5 +99,62 @@ public class JsonTable {
 		this.primaryKey = primaryKey;
 	}
 
+	public String createTableQuery() {
+		//first read the information about the table fields
+		Map<String,String> fields = getFields();
+		String fieldsString="";
+		int counter =0;
+		String primaryKey;
+		for (Map.Entry<String, String> entry : fields.entrySet())
+		{
+			fieldsString = fieldsString+""+entry.getKey()+" "+ entry.getValue()+"";
+			if(entry.getKey().equals("PRIMARY KEY")){
+				primaryKey = entry.getValue().substring(entry.getValue().indexOf("(") + 1);
+				primaryKey = primaryKey.substring(0, primaryKey.indexOf(")"));
+			}
+			if(counter==fields.size()-1)
+				fieldsString = fieldsString+")";
+			else 
+				fieldsString = fieldsString+",";
+			counter = counter +1;
+		}	
 
+		//information about the name-value style properties 
+		Map<String,Object> propertiesMap = getProperties();
+		String propertiesString="";
+
+		if(propertiesMap != null){
+			counter =0;
+			for (Map.Entry<String, Object> entry : propertiesMap.entrySet())
+			{
+				Object ot = entry.getValue();
+				String value = ot+"";
+				if(ot instanceof String){
+					value = "'"+value+"'";
+				}else if(ot instanceof Map){
+					Map<String,Object> otMap = (Map<String,Object>)ot;
+					value = "{"+new DataFormatter().jsonMaptoSqlString(otMap, ",")+"}";
+				}
+				propertiesString = propertiesString+entry.getKey()+"="+ value+"";
+				if(counter!=propertiesMap.size()-1)
+					propertiesString = propertiesString+" AND ";
+				counter = counter +1;
+			}	
+		}
+
+		String query =  "CREATE TABLE IF NOT EXISTS "+keyspace+"."+table+" "+ fieldsString; 
+
+		if(propertiesMap != null)
+			query = query + " WITH "+ propertiesString;
+
+		query = query +";";
+		return query;
+	}
+	
+	public String dropTableQuery() {
+		String query ="DROP TABLE IF EXISTS "+ keyspace+"."+table+";"; 
+		return query;
+
+	}
+	
 }

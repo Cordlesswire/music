@@ -19,7 +19,7 @@
  * ============LICENSE_END=============================================
  * ====================================================================
  */
-package com.att.research.music.ecstore.jsonobjects;
+package com.att.research.music.datastore.cassaORM;
 
 import java.util.HashMap;
 import java.util.Map;

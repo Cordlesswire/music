@@ -31,9 +31,9 @@ import java.util.Map;
 
 import javax.ws.rs.core.MediaType;
 
-import com.att.research.music.ecstore.jsonobjects.JsonKeySpace;
-import com.att.research.music.ecstore.jsonobjects.JsonTable;
-import com.att.research.music.ecstore.jsonobjects.JsonUpdate;
+import com.att.research.music.datastore.cassaORM.TableORM;
+import com.att.research.music.datastore.cassaORM.RowORM;
+import com.att.research.music.datastore.cassaORM.KeySpaceORM;
 import com.sun.jersey.api.client.Client;
 import com.sun.jersey.api.client.ClientResponse;
 import com.sun.jersey.api.client.WebResource;
@@ -59,7 +59,7 @@ public class TestMusicE2E {
 		String durabilityOfWrites="false";
 		Map<String,String> consistencyInfo= new HashMap<String, String>();
 		consistencyInfo.put("type", "eventual");
-		JsonKeySpace jsonKp = new JsonKeySpace();
+		KeySpaceORM jsonKp = new KeySpaceORM();
 		jsonKp.setConsistencyInfo(consistencyInfo);
 		jsonKp.setDurabilityOfWrites(durabilityOfWrites);
 		jsonKp.setReplicationInfo(replicationInfo);
@@ -92,7 +92,7 @@ public class TestMusicE2E {
 		Map<String,String> consistencyInfo= new HashMap<String, String>();
 		consistencyInfo.put("type", "eventual");
 
-		JsonTable jtab = new JsonTable();
+		TableORM jtab = new TableORM();
 		jtab.setFields(fields);
 		jtab.setConsistencyInfo(consistencyInfo);
 
@@ -146,7 +146,7 @@ public class TestMusicE2E {
 		Map<String,String> consistencyInfo= new HashMap<String, String>();
 		consistencyInfo.put("type", "eventual");
 
-		JsonUpdate jIns = new JsonUpdate();
+		RowORM jIns = new RowORM();
 		jIns.setValues(values);
 		jIns.setConsistencyInfo(consistencyInfo);
 		ClientConfig clientConfig = new DefaultClientConfig();
@@ -244,7 +244,7 @@ public class TestMusicE2E {
 		consistencyInfo.put("type", "critical");
 		consistencyInfo.put("lockId", lockId);
 
-		JsonUpdate jIns = new JsonUpdate();
+		RowORM jIns = new RowORM();
 		jIns.setValues(values);
 		jIns.setConsistencyInfo(consistencyInfo);
 		ClientConfig clientConfig = new DefaultClientConfig();
@@ -273,7 +273,7 @@ public class TestMusicE2E {
 		Map<String,String> consistencyInfo= new HashMap<String, String>();
 		consistencyInfo.put("type", "eventual");
 
-		JsonUpdate jDel = new JsonUpdate();
+		RowORM jDel = new RowORM();
 		jDel.setConsistencyInfo(consistencyInfo);
 		ClientConfig clientConfig = new DefaultClientConfig();
 
@@ -344,7 +344,7 @@ public class TestMusicE2E {
 		Map<String,String> consistencyInfo= new HashMap<String, String>();
 		consistencyInfo.put("type", "eventual");
 
-		JsonKeySpace jsonKp = new JsonKeySpace();
+		KeySpaceORM jsonKp = new KeySpaceORM();
 		jsonKp.setConsistencyInfo(consistencyInfo);
 
 		ClientConfig clientConfig = new DefaultClientConfig();

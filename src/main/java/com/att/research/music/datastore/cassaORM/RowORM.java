@@ -20,7 +20,7 @@ stated inside of the file.
  ---------------------------------------------------------------------------
 
  */
-package com.att.research.music.ecstore.jsonobjects;
+package com.att.research.music.datastore.cassaORM;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -30,9 +30,13 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Map;
 
-public class JsonUpdate implements Serializable {
-	private String keyspaceName;
-	private String tableName;
+import com.att.research.music.datastore.DataFormatter;
+import com.att.research.music.main.Music;
+import com.datastax.driver.core.DataType;
+
+public class RowORM implements Serializable {
+	private String keyspace;
+	private String table;
     private Map<String,Object> values;
     private String ttl, timestamp;
     private Map<String,String> consistencyInfo;
@@ -146,19 +150,19 @@ public class JsonUpdate implements Serializable {
 	private Map<String,Object> row_specification;
 
 	public String getKeyspaceName() {
-		return keyspaceName;
+		return keyspace;
 	}
 
 	public void setKeyspaceName(String keyspaceName) {
-		this.keyspaceName = keyspaceName;
+		this.keyspace = keyspaceName;
 	}
 
 	public String getTableName() {
-		return tableName;
+		return table;
 	}
 
 	public void setTableName(String tableName) {
-		this.tableName = tableName;
+		this.table = tableName;
 	}
 
     
@@ -201,4 +205,58 @@ public class JsonUpdate implements Serializable {
 		return bos.toByteArray();
 	}
 
+	public String insertQuery() {
+		return  "INSERT INTO "+basePartOfInsertQuery();
+	}
+	
+	public String insertIfNotExistsQuery() {
+		return  "INSERT IF NOT EXISTS INTO "+basePartOfInsertQuery();
+	}
+	
+	private String basePartOfInsertQuery() {
+		Map<String,Object> valuesMap =  getValues();
+		String fieldsString="";
+		String valueString ="";
+		int counter =0;
+		for (Map.Entry<String, Object> entry : valuesMap.entrySet()){
+			fieldsString = fieldsString+""+entry.getKey();
+			Object valueObj = entry.getValue();	
+
+			DataType colType = new Music().getColType(keyspace, table, entry.getKey());
+			String formattedValue = new DataFormatter().convertToCQLDataType(colType, valueObj);
+			valueString = valueString + formattedValue;
+			if(counter==valuesMap.size()-1){
+				fieldsString = fieldsString+")";
+				valueString = valueString+")";
+			}
+			else{ 
+				fieldsString = fieldsString+",";
+				valueString = valueString+",";
+			}
+			counter = counter +1;
+		}
+
+		//System.out.println(valueString);
+		String query = keyspace+"."+table+" "+ fieldsString+" VALUES "+ valueString;   
+
+		String ttl = getTtl();
+		String timestamp = getTimestamp();
+
+		if((ttl != null) && (timestamp != null)){
+			query = query + " USING TTL "+ ttl +" AND TIMESTAMP "+ timestamp;
+		}
+
+		if((ttl != null) && (timestamp == null)){
+			query = query + " USING TTL "+ ttl;
+		}
+
+		if((ttl == null) && (timestamp != null)){
+			query = query + " USING TIMESTAMP "+ timestamp;
+		}
+
+		query = query +";";
+		return query;
+
+		
+	}
 }

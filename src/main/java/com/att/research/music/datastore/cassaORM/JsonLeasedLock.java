@@ -1,4 +1,4 @@
-package com.att.research.music.ecstore.jsonobjects;
+package com.att.research.music.datastore.cassaORM;
 
 public class JsonLeasedLock {
 	long leasePeriod;

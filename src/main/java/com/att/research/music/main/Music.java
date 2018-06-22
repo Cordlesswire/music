@@ -28,8 +28,12 @@ import java.util.UUID;
 
 import org.apache.log4j.Logger;
 
-import com.att.research.music.ecstore.CassaECStore;
-import com.att.research.music.ecstore.DataFormatter;
+import com.att.research.music.datastore.CassaStore;
+import com.att.research.music.datastore.DataFormatter;
+import com.att.research.music.datastore.cassaORM.IndexORM;
+import com.att.research.music.datastore.cassaORM.KeySpaceORM;
+import com.att.research.music.datastore.cassaORM.RowORM;
+import com.att.research.music.datastore.cassaORM.TableORM;
 import com.datastax.driver.core.ColumnDefinitions;
 import com.datastax.driver.core.DataType;
 import com.datastax.driver.core.ResultSet;
@@ -44,11 +48,11 @@ import helpers.WriteReturnType;
 public class Music {
 
 	final  Logger logger = Logger.getLogger(Music.class);
-	CassaECStore   dataStore;
+	CassaStore   dataStore;
 	DataFormatter dataFormatter; 
 
 	public Music() {
-		dataStore = new CassaECStore();
+		dataStore = new CassaStore();
 		dataFormatter = new DataFormatter();
 	}
 
@@ -60,7 +64,7 @@ public class Music {
 
 	public  WriteReturnType  acquireLock(String keyspace, String table, String key, String lockReference){
 		try {
-			if(dataStore.isItMyTurn(keyspace, table, key, UUID.fromString(lockReference)) == false)
+			if(dataStore.isTopOfLockQ(keyspace, table, key, UUID.fromString(lockReference)) == false)
 				return new WriteReturnType(ResultType.FAILURE,"You are the not the lock holder"); 
 
 			syncIfRequired(keyspace, table, key);
@@ -94,7 +98,7 @@ public class Music {
 
 
 	public  WriteReturnType criticalPut(String keyspace, String table, String key, String query, String lockReference, Condition conditionInfo){
-		if(dataStore.isItMyTurn(keyspace, table, key, UUID.fromString(lockReference)) == false)
+		if(dataStore.isTopOfLockQ(keyspace, table, key, UUID.fromString(lockReference)) == false)
 			return new WriteReturnType(ResultType.FAILURE,"Cannot perform operation since you are the not the lock holder"); 
 		else 
 			return conditionalPut(query, conditionInfo);
@@ -118,7 +122,7 @@ public class Music {
 	}
 	
 	public  ReadReturnType criticalGet(String keyspace, String table, String key, String query, String lockReference){
-		if(dataStore.isItMyTurn(keyspace, table, key, UUID.fromString(lockReference)) == false)
+		if(dataStore.isTopOfLockQ(keyspace, table, key, UUID.fromString(lockReference)) == false)
 			return new ReadReturnType(ResultType.FAILURE,"Cannot perform operation since you are the not the lock holder",null); 
 		ResultSet dataReturned = dataStore.executeCriticalGet(query);			
 		return new ReadReturnType(ResultType.SUCCESS,"Select performed", dataReturned); 
@@ -249,30 +253,37 @@ public class Music {
 	 * Supplementary functions that do not use locking
 	 */
 	
-	public void createKeyspace(String createKeyspaceQuery) throws Exception {
-		dataStore.executePut(createKeyspaceQuery, "eventual");
+	public void createKeyspace(KeySpaceORM kspObject) throws Exception {
+		dataStore.executePut(kspObject.createKeySpaceQuery(), "eventual");
 	}
 
-	public void dropKeyspace(String dropKeyspaceQuery) throws Exception {
-		dataStore.executePut(dropKeyspaceQuery, "eventual");
+	public void dropKeyspace(KeySpaceORM kspObject) throws Exception {
+		dataStore.executePut(kspObject.createKeySpaceQuery(), "eventual");
 	}
 
-	public void createTable(String keyspace, String table, String createTableQuery) {
-		dataStore.executePut(createTableQuery, "eventual");
+	public void createTable(TableORM tabObj) {
+		dataStore.executePut(tabObj.createTableQuery(), "eventual");
 		//internal table just to store locks
-		dataStore.createLockingTable(keyspace, table);
+		dataStore.createLockingTable(tabObj.getKeyspaceName(), tabObj.getTableName());
 
 	}
 
-	public void dropTable(String dropTableQuery) {
-		dataStore.executePut(dropTableQuery, "eventual");
+	public void dropTable(TableORM tabObj) {
+		dataStore.executePut(tabObj.dropTableQuery(), "eventual");
 	}
 	
 
-	public void createIndex(String createIndexQuery) {
-		dataStore.executePut(createIndexQuery, "eventual");
+	public void createIndex(IndexORM indexObj) {
+		dataStore.executePut(indexObj.createIndexQuery(), "eventual");
 	}
 
+	public void insertIntoTable(RowORM insertObj) {
+		if(insertObj.getConsistencyInfo().get("type").equals("eventual"))
+			dataStore.executePut(insertObj.insertQuery(),"eventual");
+		else
+			dataStore.executePut(insertObj.insertIfNotExistsQuery(),"serial");
+	}
+	
 	public WriteReturnType eventualPut(String query){
 		dataStore.executePut(query, "eventual");
 		return new WriteReturnType(ResultType.SUCCESS,""); 
